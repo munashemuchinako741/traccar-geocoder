@@ -695,36 +695,46 @@ private:
             if (!nr.location().valid()) return;
         }
 
-        uint32_t way_id = static_cast<uint32_t>(ways.size());
-        uint32_t node_offset = static_cast<uint32_t>(street_nodes.size());
+        uint32_t name_id = strings.intern(name);
 
-        for (const auto& nr : wnodes) {
-            street_nodes.push_back({
-                static_cast<float>(nr.location().lat()),
-                static_cast<float>(nr.location().lon())
-            });
-        }
+        // A way header holds at most 255 nodes, so longer ways are split into
+        // pieces sharing an end node. Otherwise the nodes past 255 are written
+        // but never read, and queries miss the rest of the way.
+        const size_t kMaxNodes = 255;
+        for (size_t start = 0; start + 1 < wnodes.size(); start += kMaxNodes - 1) {
+            size_t end = std::min(start + kMaxNodes, wnodes.size());
 
-        WayHeader header{};
-        header.node_offset = node_offset;
-        header.node_count = static_cast<uint8_t>(std::min(wnodes.size(), size_t(255)));
-        header.name_id = strings.intern(name);
-        ways.push_back(header);
+            uint32_t way_id = static_cast<uint32_t>(ways.size());
+            uint32_t node_offset = static_cast<uint32_t>(street_nodes.size());
 
-        std::unordered_set<uint64_t> way_cells;
-        for (size_t i = 0; i + 1 < wnodes.size(); i++) {
-            double lat1 = wnodes[i].location().lat();
-            double lng1 = wnodes[i].location().lon();
-            double lat2 = wnodes[i + 1].location().lat();
-            double lng2 = wnodes[i + 1].location().lon();
-
-            auto cell_ids = cover_edge(lat1, lng1, lat2, lng2);
-            for (const auto& cell_id : cell_ids) {
-                way_cells.insert(cell_id.id());
+            for (size_t i = start; i < end; i++) {
+                street_nodes.push_back({
+                    static_cast<float>(wnodes[i].location().lat()),
+                    static_cast<float>(wnodes[i].location().lon())
+                });
             }
-        }
-        for (uint64_t cell_id : way_cells) {
-            cell_to_ways[cell_id].push_back(way_id);
+
+            WayHeader header{};
+            header.node_offset = node_offset;
+            header.node_count = static_cast<uint8_t>(end - start);
+            header.name_id = name_id;
+            ways.push_back(header);
+
+            std::unordered_set<uint64_t> way_cells;
+            for (size_t i = start; i + 1 < end; i++) {
+                double lat1 = wnodes[i].location().lat();
+                double lng1 = wnodes[i].location().lon();
+                double lat2 = wnodes[i + 1].location().lat();
+                double lng2 = wnodes[i + 1].location().lon();
+
+                auto cell_ids = cover_edge(lat1, lng1, lat2, lng2);
+                for (const auto& cell_id : cell_ids) {
+                    way_cells.insert(cell_id.id());
+                }
+            }
+            for (uint64_t cell_id : way_cells) {
+                cell_to_ways[cell_id].push_back(way_id);
+            }
         }
 
         way_count_++;
