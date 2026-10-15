@@ -374,15 +374,10 @@ static const std::vector<std::string> kExcludedHighways = {
     "bridleway", "construction"
 };
 
-// With --all-roads: every way vehicles can drive on, tracks included, but no
-// roads that do not exist (yet or any more)
-static const std::vector<std::string> kAllRoadsExcludedHighways = {
-    "footway", "path", "steps", "cycleway", "bridleway", "corridor",
-    "platform", "construction", "proposed", "abandoned", "disused", "razed"
-};
-
 static bool is_included_highway(const char* value) {
-    for (const auto& excluded : kAllRoads ? kAllRoadsExcludedHighways : kExcludedHighways) {
+    // Tracks are only indexed with --all-roads
+    if (kAllRoads && std::strcmp(value, "track") == 0) return true;
+    for (const auto& excluded : kExcludedHighways) {
         if (excluded == value) return false;
     }
     return true;
