@@ -478,7 +478,12 @@ impl Index {
                     let semantic = node.semantic as usize;
                     if semantic == SEM_NONE as usize || semantic >= SEM_COUNT { return; }
                     if best_by_semantic[semantic].is_some() { return; }
-                    if node.country_code != 0 && node.country_code != country { return; }
+                    // The builder stores place node codes lowercase and country
+                    // polygon codes as tagged (uppercase), so compare without case.
+                    if node.country_code != 0
+                        && !node.country_code.to_be_bytes().eq_ignore_ascii_case(&country.to_be_bytes()) {
+                        return;
+                    }
                     let dx = node.lat - qlat;
                     let dy = node.lng - qlng;
                     let dist = dx * dx + dy * dy;
