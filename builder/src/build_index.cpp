@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -395,6 +396,16 @@ static uint32_t parse_house_number(const char* s) {
 
 static uint64_t addr_count_total = 0;
 
+// Packs an ISO 3166-1 alpha-2 code, 0 = unknown. Always uppercase, so codes
+// from country polygon tags and from the (lowercase) country lookup for place
+// nodes compare equal in the server.
+static uint16_t pack_country_code(const char* code) {
+    if (!code || !code[0] || !code[1]) return 0;
+    return static_cast<uint16_t>(
+        (std::toupper(static_cast<unsigned char>(code[0])) << 8) |
+        std::toupper(static_cast<unsigned char>(code[1])));
+}
+
 // String ID 0 is reserved for "not present" (interned as empty string in main).
 static inline uint32_t intern_or_zero(const char* s) {
     return (s && *s) ? strings.intern(s) : 0;
@@ -452,9 +463,7 @@ static void add_admin_polygon(const std::vector<std::pair<double,double>>& verti
     poly.name_id = strings.intern(name);
     poly.semantic = static_cast<uint8_t>(semantic);
     poly.area = polygon_area(simplified);
-    poly.country_code = (country_code && country_code[0] && country_code[1])
-        ? static_cast<uint16_t>((country_code[0] << 8) | country_code[1])
-        : 0;
+    poly.country_code = pack_country_code(country_code);
     admin_polygons.push_back(poly);
     poly_tag_info.push_back(tag);
 
@@ -954,9 +963,7 @@ static void resolve_semantic_levels() {
         address_levels::Semantic sem = address_levels::lookup_place(
             place_node_tag_info[i].place_type.c_str(), false /* node */);
         n.semantic = static_cast<uint8_t>(sem);
-        n.country_code = (country_code && country_code[0] && country_code[1])
-            ? static_cast<uint16_t>((country_code[0] << 8) | country_code[1])
-            : 0;
+        n.country_code = pack_country_code(country_code);
         if (sem != address_levels::Semantic::None) resolved_places++;
     }
 
