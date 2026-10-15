@@ -152,7 +152,7 @@ static std::unordered_map<uint64_t, std::vector<uint32_t>> cell_to_places;
 // --- S2 helpers ---
 
 static int kStreetCellLevel = 17;
-// --all-roads: also index unnamed roads and tracks, for road snapping
+// --all-roads: also index unnamed roads, for road snapping
 static bool kAllRoads = false;
 static int kAdminCellLevel = 10;
 
@@ -370,13 +370,11 @@ static std::vector<std::pair<double,double>> simplify_polygon(
 // --- Highway filter ---
 
 static const std::vector<std::string> kExcludedHighways = {
-    "footway", "path", "track", "steps", "cycleway",
+    "footway", "path", "steps", "cycleway",
     "bridleway", "construction"
 };
 
 static bool is_included_highway(const char* value) {
-    // Tracks are only indexed with --all-roads
-    if (kAllRoads && std::strcmp(value, "track") == 0) return true;
     for (const auto& excluded : kExcludedHighways) {
         if (excluded == value) return false;
     }
