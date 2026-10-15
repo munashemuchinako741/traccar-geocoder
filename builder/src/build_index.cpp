@@ -33,9 +33,11 @@
 
 // --- Binary format structs ---
 
+// node_count fits in the padding after it, so widening it from uint8_t kept
+// the struct size. OSM ways have at most 2000 nodes.
 struct WayHeader {
     uint32_t node_offset;
-    uint8_t node_count;
+    uint16_t node_count;
     uint32_t name_id;
 };
 
@@ -51,7 +53,7 @@ struct AddrPoint {
 
 struct InterpWay {
     uint32_t node_offset;
-    uint8_t node_count;
+    uint16_t node_count;
     uint32_t street_id;
     uint32_t start_number;
     uint32_t end_number;
@@ -661,7 +663,7 @@ private:
 
         InterpWay iw{};
         iw.node_offset = node_offset;
-        iw.node_count = static_cast<uint8_t>(std::min(wnodes.size(), size_t(255)));
+        iw.node_count = static_cast<uint16_t>(std::min(wnodes.size(), size_t(UINT16_MAX)));
         iw.street_id = strings.intern(street);
         iw.start_number = 0;
         iw.end_number = 0;
@@ -695,46 +697,36 @@ private:
             if (!nr.location().valid()) return;
         }
 
-        uint32_t name_id = strings.intern(name);
+        uint32_t way_id = static_cast<uint32_t>(ways.size());
+        uint32_t node_offset = static_cast<uint32_t>(street_nodes.size());
 
-        // A way header holds at most 255 nodes, so longer ways are split into
-        // pieces sharing an end node. Otherwise the nodes past 255 are written
-        // but never read, and queries miss the rest of the way.
-        const size_t kMaxNodes = 255;
-        for (size_t start = 0; start + 1 < wnodes.size(); start += kMaxNodes - 1) {
-            size_t end = std::min(start + kMaxNodes, wnodes.size());
+        for (const auto& nr : wnodes) {
+            street_nodes.push_back({
+                static_cast<float>(nr.location().lat()),
+                static_cast<float>(nr.location().lon())
+            });
+        }
 
-            uint32_t way_id = static_cast<uint32_t>(ways.size());
-            uint32_t node_offset = static_cast<uint32_t>(street_nodes.size());
+        WayHeader header{};
+        header.node_offset = node_offset;
+        header.node_count = static_cast<uint16_t>(std::min(wnodes.size(), size_t(UINT16_MAX)));
+        header.name_id = strings.intern(name);
+        ways.push_back(header);
 
-            for (size_t i = start; i < end; i++) {
-                street_nodes.push_back({
-                    static_cast<float>(wnodes[i].location().lat()),
-                    static_cast<float>(wnodes[i].location().lon())
-                });
+        std::unordered_set<uint64_t> way_cells;
+        for (size_t i = 0; i + 1 < wnodes.size(); i++) {
+            double lat1 = wnodes[i].location().lat();
+            double lng1 = wnodes[i].location().lon();
+            double lat2 = wnodes[i + 1].location().lat();
+            double lng2 = wnodes[i + 1].location().lon();
+
+            auto cell_ids = cover_edge(lat1, lng1, lat2, lng2);
+            for (const auto& cell_id : cell_ids) {
+                way_cells.insert(cell_id.id());
             }
-
-            WayHeader header{};
-            header.node_offset = node_offset;
-            header.node_count = static_cast<uint8_t>(end - start);
-            header.name_id = name_id;
-            ways.push_back(header);
-
-            std::unordered_set<uint64_t> way_cells;
-            for (size_t i = start; i + 1 < end; i++) {
-                double lat1 = wnodes[i].location().lat();
-                double lng1 = wnodes[i].location().lon();
-                double lat2 = wnodes[i + 1].location().lat();
-                double lng2 = wnodes[i + 1].location().lon();
-
-                auto cell_ids = cover_edge(lat1, lng1, lat2, lng2);
-                for (const auto& cell_id : cell_ids) {
-                    way_cells.insert(cell_id.id());
-                }
-            }
-            for (uint64_t cell_id : way_cells) {
-                cell_to_ways[cell_id].push_back(way_id);
-            }
+        }
+        for (uint64_t cell_id : way_cells) {
+            cell_to_ways[cell_id].push_back(way_id);
         }
 
         way_count_++;

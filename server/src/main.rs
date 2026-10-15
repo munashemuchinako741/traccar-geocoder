@@ -35,7 +35,7 @@ fn cell_neighbors_at_level(cell_id: u64, level: u64) -> Vec<u64> {
 #[derive(Clone, Copy)]
 struct WayHeader {
     node_offset: u32,
-    node_count: u8,
+    node_count: u16,
     name_id: u32,
 }
 
@@ -55,7 +55,7 @@ struct AddrPoint {
 #[derive(Clone, Copy)]
 struct InterpWay {
     node_offset: u32,
-    node_count: u8,
+    node_count: u16,
     street_id: u32,
     start_number: u32,
     end_number: u32,
